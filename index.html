@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rapidpatch Pothole Index — Live Auckland pothole tracker</title>
+<meta name="description" content="Live count of every Auckland pothole flagged and repaired by Rapidpatch. Updated daily. The map of where Auckland is breaking.">
+<link rel="canonical" href="https://www.rapidpatch.co.nz/index">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root{
+    --asphalt:#0F2540;--orange:#FF9D2E;--chalk:#FAFBF8;--stone:#d9d6cc;
+    --text:#1a1a1a;--muted:#666;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--chalk);color:var(--text);line-height:1.5;
+  }
+  .topbar{background:var(--asphalt);color:var(--chalk);padding:12px 24px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+  .topbar a{color:var(--chalk);text-decoration:none;border-bottom:1px solid var(--orange);font-weight:600}
+  .hero{background:var(--asphalt);color:var(--chalk);padding:60px 24px 80px;text-align:center;position:relative;overflow:hidden}
+  .hero::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 100%,rgba(255,157,46,.08),transparent 60%);pointer-events:none}
+  .hero h1{margin:0 0 8px;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--orange);position:relative;z-index:1}
+  .counter{font-size:clamp(80px,18vw,180px);font-weight:900;line-height:.9;margin:0;letter-spacing:-3px;font-variant-numeric:tabular-nums;position:relative;z-index:1}
+  .hero p.tag{margin:8px 0 24px;font-size:18px;opacity:.85;position:relative;z-index:1}
+  .stats{display:flex;justify-content:center;gap:32px;flex-wrap:wrap;margin-top:8px;position:relative;z-index:1}
+  .stat{text-align:center}
+  .stat .n{font-size:32px;font-weight:800;color:var(--orange);font-variant-numeric:tabular-nums}
+  .stat .l{font-size:12px;opacity:.7;text-transform:uppercase;letter-spacing:1px}
+  .cta{display:inline-block;margin-top:32px;background:var(--orange);color:var(--asphalt);padding:14px 28px;border-radius:999px;font-weight:800;text-decoration:none;font-size:15px;letter-spacing:.3px;position:relative;z-index:1;transition:transform .15s}
+  .cta:hover{transform:translateY(-1px)}
+  section{padding:48px 24px;max-width:1100px;margin:0 auto}
+  section h2{font-size:28px;margin:0 0 6px;color:var(--asphalt);font-weight:900;letter-spacing:-.5px}
+  section p.lede{color:var(--muted);margin:0 0 24px;font-size:16px}
+  #map{height:520px;width:100%;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(15,37,64,.1);background:#e8e6dd}
+  .map-note{font-size:13px;color:var(--muted);margin-top:10px;text-align:right}
+  .top-areas{background:white;border-radius:8px;padding:24px 28px;box-shadow:0 2px 12px rgba(15,37,64,.06);margin-top:16px}
+  .top-areas ol{margin:0;padding-left:24px;font-size:16px;line-height:1.9}
+  .top-areas li strong{color:var(--asphalt)}
+  .top-areas li span{color:var(--muted);font-size:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-top:16px}
+  .card{background:white;padding:14px 16px;border-radius:6px;box-shadow:0 1px 4px rgba(15,37,64,.06);border-left:3px solid var(--stone);transition:border-color .15s}
+  .card.repaired{border-left-color:#2da14b}
+  .card.active{border-left-color:var(--orange)}
+  .card .tag{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+  .card .where{font-size:15px;font-weight:700;color:var(--asphalt);margin:4px 0 2px}
+  .card .when{font-size:13px;color:var(--muted)}
+  .card .badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;margin-top:6px;letter-spacing:.5px}
+  .card.repaired .badge{background:#e6f4ea;color:#1c5d2f}
+  .card.active .badge{background:#fff2dc;color:#8a4a00}
+  footer{background:var(--asphalt);color:var(--chalk);padding:32px 24px;text-align:center;font-size:14px}
+  footer a{color:var(--orange);font-weight:600;text-decoration:none}
+  .background{background:white;border-radius:8px;padding:24px 28px;margin-top:16px;box-shadow:0 2px 12px rgba(15,37,64,.06);font-size:15px;line-height:1.7}
+  .background h3{margin:0 0 8px;color:var(--asphalt);font-size:18px}
+  .background p{margin:0 0 12px;color:#333}
+  @media(max-width:540px){
+    .hero{padding:40px 16px 60px}
+    .counter{font-size:96px;letter-spacing:-2px}
+    .stats{gap:18px}
+    section{padding:32px 16px}
+    #map{height:380px}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>Rapidpatch Pothole Index</div>
+  <div><a href="https://www.rapidpatch.co.nz/">← rapidpatch.co.nz</a></div>
+</div>
+
+<header class="hero">
+  <h1>Auckland potholes flagged by Rapidpatch</h1>
+  <p class="counter" id="bigCounter">—</p>
+  <p class="tag">Live count. Updated daily. The map of where Auckland is breaking.</p>
+  <div class="stats">
+    <div class="stat"><div class="n" id="statRepaired">—</div><div class="l">Repaired</div></div>
+    <div class="stat"><div class="n" id="statPending">—</div><div class="l">Pending</div></div>
+    <div class="stat"><div class="n" id="statActive">—</div><div class="l">Active flags</div></div>
+  </div>
+  <a class="cta" href="https://www.rapidpatch.co.nz/contractors">Got a pothole? Get a quote →</a>
+</header>
+
+<section>
+  <h2>Where the flags are</h2>
+  <p class="lede">Heatmap of every Rapidpatch flag deployment. Orange = active, green = repaired. Click a dot for detail.</p>
+  <div id="map"></div>
+  <p class="map-note">Map tiles © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · Data updated daily at midnight NZT</p>
+</section>
+
+<section>
+  <h2>Auckland's pothole-heaviest suburbs</h2>
+  <p class="lede">By flag count this month.</p>
+  <div class="top-areas">
+    <ol id="topAreas">
+      <li>Loading…</li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <h2>The tag wall</h2>
+  <p class="lede">Every flag we've placed, newest first. Each tag is sequentially numbered and tracked.</p>
+  <div class="grid" id="tagWall"></div>
+</section>
+
+<section>
+  <h2>About the Rapidpatch Pothole Index</h2>
+  <div class="background">
+    <h3>Why this exists</h3>
+    <p>Auckland's potholes are invisible until you hit one. Then they own your Wednesday — bent wheels, blown tyres, suspension claims, insurance hassle.</p>
+    <p>Our crews place a numbered flag in every pothole we're about to fix. Each flag is sequential (#001, #002…), geotagged, and tracked on this page. It's the only public, live record of where Auckland is breaking and how fast it's being repaired.</p>
+    <h3>How the scheme works</h3>
+    <p>Property owner spots a hole → photo-quotes via <a href="https://www.rapidpatch.co.nz/">rapidpatch.co.nz</a> → fixed-price quote in 2 hours → crew dispatched → flag planted → repair within 5–7 working days → 12-month warranty.</p>
+    <h3>Data</h3>
+    <p>Counts on this page reflect flags placed by Rapidpatch crews on private property (driveways, body corp carparks, retirement village internal roads, commercial yards) with the owner's consent. Council and Kāinga Ora work is included only where we've been engaged. Auckland Transport response data sourced separately via LGOIMA (reference CAS-PR0R8-Y6J2N5).</p>
+    <h3>Press</h3>
+    <p>Journalists welcome. Steve Parker, founder — <a href="mailto:fix@rapidpatch.co.nz">fix@rapidpatch.co.nz</a> · 027 737 2858. Embed-ready counter and map available on request.</p>
+  </div>
+</section>
+
+<footer>
+  <p>© 2026 Rapidpatch · NZ-wide pothole, carpark & driveway repair · <a href="https://www.rapidpatch.co.nz/">rapidpatch.co.nz</a></p>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script>
+// === DEMO DATA — replace with feed from Wix CMS FlagDeployments ===
+// Until the CMS is wired, this hardcoded set demonstrates the heatmap + tag wall.
+const FLAGS = [
+  { tag: 23, suburb: "Mt Eden",        lat: -36.8772, lng: 174.7625, flagged: "2026-05-11", repaired: "2026-05-13" },
+  { tag: 22, suburb: "Remuera",        lat: -36.8819, lng: 174.8013, flagged: "2026-05-10", repaired: "2026-05-12" },
+  { tag: 21, suburb: "Pakuranga",      lat: -36.8990, lng: 174.9015, flagged: "2026-05-10", repaired: null },
+  { tag: 20, suburb: "Pakuranga",      lat: -36.9020, lng: 174.9050, flagged: "2026-05-09", repaired: null },
+  { tag: 19, suburb: "Manurewa",       lat: -37.0190, lng: 174.9020, flagged: "2026-05-09", repaired: "2026-05-12" },
+  { tag: 18, suburb: "Manurewa",       lat: -37.0210, lng: 174.9060, flagged: "2026-05-08", repaired: "2026-05-11" },
+  { tag: 17, suburb: "Henderson",      lat: -36.8786, lng: 174.6259, flagged: "2026-05-08", repaired: "2026-05-11" },
+  { tag: 16, suburb: "Henderson",      lat: -36.8810, lng: 174.6290, flagged: "2026-05-07", repaired: null },
+  { tag: 15, suburb: "Birkenhead",     lat: -36.8181, lng: 174.7320, flagged: "2026-05-07", repaired: "2026-05-10" },
+  { tag: 14, suburb: "Devonport",      lat: -36.8331, lng: 174.7956, flagged: "2026-05-06", repaired: "2026-05-09" },
+  { tag: 13, suburb: "New Lynn",       lat: -36.9082, lng: 174.6873, flagged: "2026-05-06", repaired: "2026-05-09" },
+  { tag: 12, suburb: "Avondale",       lat: -36.8970, lng: 174.6987, flagged: "2026-05-05", repaired: "2026-05-08" },
+  { tag: 11, suburb: "Mt Wellington",  lat: -36.9020, lng: 174.8420, flagged: "2026-05-05", repaired: "2026-05-08" },
+  { tag: 10, suburb: "Mangere",        lat: -36.9572, lng: 174.7920, flagged: "2026-05-04", repaired: "2026-05-07" },
+  { tag:  9, suburb: "Otahuhu",        lat: -36.9447, lng: 174.8336, flagged: "2026-05-04", repaired: "2026-05-07" },
+  { tag:  8, suburb: "Onehunga",       lat: -36.9242, lng: 174.7900, flagged: "2026-05-03", repaired: "2026-05-06" },
+  { tag:  7, suburb: "Ellerslie",      lat: -36.8970, lng: 174.8160, flagged: "2026-05-03", repaired: "2026-05-06" },
+  { tag:  6, suburb: "Glen Eden",      lat: -36.9123, lng: 174.6500, flagged: "2026-05-02", repaired: "2026-05-05" },
+  { tag:  5, suburb: "Titirangi",      lat: -36.9359, lng: 174.6543, flagged: "2026-05-02", repaired: "2026-05-05" },
+  { tag:  4, suburb: "Glenfield",      lat: -36.7798, lng: 174.7240, flagged: "2026-05-01", repaired: "2026-05-04" },
+  { tag:  3, suburb: "Albany",         lat: -36.7273, lng: 174.7019, flagged: "2026-04-30", repaired: "2026-05-03" },
+  { tag:  2, suburb: "Howick",         lat: -36.8930, lng: 174.9290, flagged: "2026-04-30", repaired: "2026-05-03" },
+  { tag:  1, suburb: "Parnell",        lat: -36.8597, lng: 174.7800, flagged: "2026-04-29", repaired: "2026-05-02" },
+];
+
+// === STATS ===
+const repaired = FLAGS.filter(f => f.repaired).length;
+const pending = FLAGS.length - repaired;
+const active = pending; // active = currently flagged but not repaired
+document.getElementById('bigCounter').textContent = FLAGS.length;
+document.getElementById('statRepaired').textContent = repaired;
+document.getElementById('statPending').textContent = pending;
+document.getElementById('statActive').textContent = active;
+
+// === MAP ===
+const map = L.map('map', { scrollWheelZoom: false }).setView([-36.875, 174.78], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+  maxZoom: 18,
+}).addTo(map);
+
+// Heat layer (red→orange intensity)
+const heatPoints = FLAGS.map(f => [f.lat, f.lng, f.repaired ? 0.4 : 0.9]);
+L.heatLayer(heatPoints, {
+  radius: 28, blur: 22, maxZoom: 14,
+  gradient: { 0.3: '#FFD89A', 0.5: '#FF9D2E', 0.7: '#FF6B00', 1: '#C04400' }
+}).addTo(map);
+
+// Individual dots for clickability
+FLAGS.forEach(f => {
+  const color = f.repaired ? '#2da14b' : '#FF9D2E';
+  const m = L.circleMarker([f.lat, f.lng], {
+    radius: 6, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1
+  }).addTo(map);
+  const status = f.repaired ? `✓ Repaired ${f.repaired}` : `<strong>Pending</strong> · flagged ${f.flagged}`;
+  m.bindPopup(`<strong>Tag #${String(f.tag).padStart(3,'0')}</strong><br>${f.suburb}<br><small>${status}</small>`);
+});
+
+// Re-enable scroll wheel zoom on click (better UX than scroll-hijack)
+map.on('click', () => map.scrollWheelZoom.enable());
+map.on('mouseout', () => map.scrollWheelZoom.disable());
+
+// === TOP AREAS ===
+const bySuburb = {};
+FLAGS.forEach(f => { bySuburb[f.suburb] = (bySuburb[f.suburb] || 0) + 1; });
+const top = Object.entries(bySuburb).sort((a, b) => b[1] - a[1]).slice(0, 5);
+document.getElementById('topAreas').innerHTML = top.map(([s, n], i) =>
+  `<li><strong>${s}</strong> <span>· ${n} flag${n === 1 ? '' : 's'}</span></li>`
+).join('');
+
+// === TAG WALL ===
+document.getElementById('tagWall').innerHTML = FLAGS
+  .sort((a, b) => b.tag - a.tag)
+  .map(f => {
+    const cls = f.repaired ? 'repaired' : 'active';
+    const badge = f.repaired ? '✓ Repaired' : '⚠ Pending';
+    const dateLine = f.repaired
+      ? `Flagged ${f.flagged} · Repaired ${f.repaired}`
+      : `Flagged ${f.flagged}`;
+    return `<div class="card ${cls}">
+      <div class="tag">Tag #${String(f.tag).padStart(3, '0')}</div>
+      <div class="where">${f.suburb}</div>
+      <div class="when">${dateLine}</div>
+      <span class="badge">${badge}</span>
+    </div>`;
+  }).join('');
+</script>
+
+</body>
+</html>
